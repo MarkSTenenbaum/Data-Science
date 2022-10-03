@@ -1,0 +1,518 @@
+---
+title: "GOVT 710:  \nSurvey Data"
+author: "Andrew R. Flores"
+date: "Spring 2022"
+resource_files:
+  - template.pptx
+output: 
+  powerpoint_presentation:
+    reference_doc: template.pptx
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(rstanarm)
+library(tidyverse)
+```
+
+## Goals
+
+- Define multi-stage complex samples
+- Identify design variables in a dataset
+  + We'll use ANES 2020
+- Analyze data incorporating design features
+  + Why do this?
+- Special topics
+  + Multilevel data structures
+  + Poststratification
+
+## The simple random sample (SRS)
+
+- All your statistical packages analyze data *assuming* they are coming from simple random samples. 
+- It's nearly impossible (and financially unfeasible) to conduct a SRS of the population. 
+- Thus, we need to use survey data analysis software that takes into account the *decisions* people made in sampling individuals for a surey.
+- This usually comes in the form of:
+  + Sampling weights
+  + Strata / clusters
+  + Sampling units
+- Can affect *both* the point estimate and the standard error
+
+## Sampling designs (features)
+- *Sampling weights*: a probability weight modeling the likelihood an individual was sampled. Usually has other adjustments to match the sample characteristics to known population characteristics (gender/race). Typically, sampling weight sum to the total sample size with a mean of 1 OR they sum to the total population.
+- *Strata*: stratification breaks the population into different groups then randomly samples within each stratum (this reduces the SE of estimates).
+- *PSU*: the primary sampling unit is the first unit that is sampled. (E.g., school districts, then schools, then students)/ignoring PSUs makes SE smaller than they should be.
+- *Replicate weights*:a series of weights that can approximate the design (don't have to specify strata/PSU).
+
+## Read the documentation
+
+![](anes2020.png)
+
+## Load necessary packages
+
+:::::{.columns}
+:::{.column}
+It is possible (and easier) to do this in Stata - but I'll show in `R`.
+
+```{r, eval = FALSE, echo = TRUE}
+install.packages("haven")
+install.packages("survey")
+install.packages("jtools")
+install.packages("remotes")
+remotes::install_github("carlganz/svrepmisc")
+```
+:::
+
+:::{.column}
+```{r, evale = TRUE, echo = TRUE, message=FALSE, warning= FALSE}
+library("haven")
+library("survey")
+library("jtools")
+library("remotes")
+library("svrepmisc")
+```
+:::
+:::::
+
+## We'll work with the 2020 ANES
+
+```{r, eval = TRUE, echo=TRUE}
+library(haven)
+anes <- read_dta("C:/Users/aflor/Downloads/anes_timeseries_2020_stata_20210719/anes_timeseries_2020_stata_20210719.dta")
+dim(anes)
+summary(anes$V200010a)
+```
+
+## Specify the survey design:
+
+:::::{.columns}
+:::{.column}
+We use the `svydesign()` function to tell `R` the complex design of the ANES. We'll use the full sample pre-election weight and associated variables.
+
+**Important:** do all data recodes *before* `svydesign()`!
+:::
+
+:::{.column}
+```{r, eval = TRUE, echo = TRUE}
+svydes <- svydesign(id = ~V200010c, weights = ~V200010a, strata = ~ V200010d, nest=TRUE, survey.lonely.psu = "adjust", data=anes)
+```
+:::
+:::::
+
+## Can inspect the design:
+
+This creates a lot of output...
+```{r, eval = TRUE, echo = TRUE}
+summary(svydes)
+```
+
+## Data pre-processing:
+
+Download the markdown file to see all the preprocessing.
+
+```{r, eval = TRUE, echo = TRUE, prompt = TRUE, strip.white=TRUE, warning=FALSE, message=FALSE}
+library(tidyverse)
+anes <- anes %>%
+  mutate(vote_int = case_when(V201100 ==1 ~ 4,
+                              V201100 ==2 ~ 3,
+                              V201100 ==3 ~ 2,
+                              V201100 ==4 ~ 1,
+                              V201100 ==5 ~ 0,
+                              TRUE ~ NA_real_),
+         age = na_if(V201507x, -9),
+         pty_str = case_when(V201229==1 ~ 3,
+                             V201229==2 ~ 2,
+                             V201230>=2 ~ 1,
+                             V201230==1 ~ 0,
+                             TRUE ~ NA_real_),
+         female = case_when(V201600 ==2 ~ 1,
+                            V201600 == 1 ~ 0,
+                            TRUE ~ NA_real_),
+         coll_grad = case_when(V201511x>=4 ~ 1,
+                               V201511x>=1 & V201511x <4 ~ 0,
+                               TRUE ~ NA_real_),
+         eff_1 = na_if(V202212, -9),
+         eff_1 = na_if(eff_1, -7),
+         eff_1 = na_if(eff_1, -6),
+         eff_1 = na_if(eff_1, -5),
+         eff_1 = na_if(eff_1, -4),
+         eff_2 = na_if(V202213, -9),
+         eff_2 = na_if(eff_2, -7),
+         eff_2 = na_if(eff_2, -6),
+         eff_2 = na_if(eff_2, -5),
+         eff_2 = na_if(eff_2, -4),
+         eff_3 = na_if(V202214, -9),
+         eff_3 = na_if(eff_3, -7),
+         eff_3 = na_if(eff_3, -6),
+         eff_3 = na_if(eff_3, -5),
+         eff_3 = na_if(eff_3, -4),
+         eff_4 = na_if(V202215, -9),
+         eff_4 = na_if(eff_4, -7),
+         eff_4 = na_if(eff_4, -6),
+         eff_4 = na_if(eff_4, -5),
+         eff_4 = na_if(eff_4, -4))
+labelled::val_labels(anes) <- NULL
+
+```
+
+## Re-specify the survey design
+
+:::::{.columns}
+:::{.column}
+- We use the `svydesign()` function again to update `R` the complex design of the ANES. 
+- This is necessary because it holds onto the variable names; if there's a mis-match, it will throw an error.
+:::
+
+:::{.column}
+```{r, eval = TRUE, echo = TRUE}
+svydes <- svydesign(id = ~V200010c, weights = ~V200010a, strata = ~ V200010d, nest=TRUE, survey.lonely.psu = "adjust", data=anes)
+```
+:::
+:::::
+
+## Analyses:
+
+:::::{.columns}
+:::{.column}
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+svymean(~age, svydes, na = TRUE)
+svysd(~age, design = svydes, na.rm = TRUE)
+svyquantile(~age, svydes, na = TRUE, c(.025,.5,.975))
+```
+:::
+
+:::{.column}
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+svyquantile(~age, svydes, na = TRUE, c(.025,.5,.975))
+```
+:::
+:::::
+
+## Proportions:
+
+:::::{.columns}
+:::{.column}
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+svyciprop(~I(female==1), svydes, method="li")
+tab <- svytable(~vote_int+female, svydes)
+```
+:::
+
+:::{.column}
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+round(prop.table(tab, 2),2)
+```
+:::
+::::::
+
+## Chi-square test
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+svychisq(~vote_int+female, svydes)
+```
+
+## Comparing histograms with `svyhist()`
+
+:::::{.columns}
+:::{.column}
+```{r, eval=TRUE, echo=FALSE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+hist(anes$age, freq = FALSE)
+```
+:::
+
+:::{.column}
+```{r, eval=TRUE, echo=FALSE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+svyhist(~ age, svydes)
+```
+:::
+:::::
+
+## Scale construction:
+
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+svycralpha(~eff_1+eff_2+eff_3+eff_4, svydes, na.rm=TRUE)
+svycralpha(~eff_1+eff_2+eff_3, svydes, na.rm=TRUE)
+```
+
+## Scale construction
+
+With a reliable score you can create an additive scale:
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+anes <- anes %>%
+  mutate(efficacy = (eff_1+eff_2+eff_3)/3)
+```
+
+```{r, eval = TRUE, echo = FALSE}
+svydes <- svydesign(id = ~V200010c, weights = ~V200010a, strata = ~ V200010d, nest=TRUE, survey.lonely.psu = "adjust", data=anes)
+```
+
+## Linear regression
+
+Modeling vote intentions:
+
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+fit_1 <- svyglm(vote_int ~ age + female + pty_str + efficacy + coll_grad, svydes, na.action=na.omit)
+round(cbind(coef(fit_1), confint(fit_1)),2)
+```
+
+## Linear regression
+
+```{r, eval=TRUE, echo=FALSE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+round(cbind(coef(fit_1), confint(fit_1)),2)
+```
+
+## Generalized linear regression
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+fit_2 <- svyolr(factor(vote_int) ~ age + female + pty_str + efficacy + coll_grad, svydes, na.action=na.omit, method = "logistic")
+```
+
+## Generalized linear regression
+
+```{r, eval=TRUE, echo=FALSE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+round(cbind(coef(fit_1), confint(fit_1)),2)
+```
+
+## Subpopulation analysis:
+
+If you want to do a subgroup analyses, you *still need* information from the full sample to estimate uncertainty. You can use the `subset()` function on the survey design to use for subgroups:
+
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+svyfem <- subset(svydes, female==1)
+```
+
+## Modeling contexts
+
+There are generally two ways to model contextual effects:
+
+1. Cluster SEs for a geographic context
+  + Easy to add to the design
+  + All analyses performed at the individual level
+2. Perform a multilevel analysis
+  + No general consensus on how to handle complex surveys.
+  + Can scale the weight to an aggregated level & put design features as "random effects"
+  
+## MRP
+
+- A process of small area estimation that takes nationally representative survey data to create sub-national estimates
+
+1. Requires surveys with demographic information
+2. Group-level predictor(s)
+3. Population data at the cells 
+
+## Example: Pooled BRFSS
+
+
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+brfss <- read_dta("D:/brfss_2017_2020.dta") %>%
+  filter(is.na(educ)==FALSE) 
+brfss <- brfss[,c("_psu", "_llcpwt", "_ststr", "lgbt", "state", "state_abbrev", "gend", "educ", "age_group", "race6", "age_edu", "cell_int", "medinc", "ss_couples", "pct_white", "pubop", "aw1")]
+samp <- sample(nrow(brfss), 5000, replace = FALSE)
+brfss <- brfss[samp,]
+```
+
+```{r, eval = TRUE, echo = FALSE}
+NE.abrv <- c("CT","ME","MA","NH","RI","VT","NJ","NY","PA")
+
+MW.abrv <- c("IN","IL","MI","OH","WI","IA","KS","MN","MO","NE",
+             "ND","SD")
+
+S.abrv <- c("DE","FL","GA","MD","NC","SC","VA","WV","AL",
+            "KY","MS","TN","AR","LA","OK","TX")
+
+W.abrv <- c("AZ","CO","ID","NM","MT","UT","NV","WY","AK","CA",
+            "HI","OR","WA")
+
+brfss <- brfss %>%
+  mutate(region = case_when(state_abbrev %in% NE.abrv ~ "Northeast",
+                            state_abbrev %in% MW.abrv ~ "Midwest",
+                            state_abbrev %in% S.abrv ~ "South",
+                            state_abbrev %in% W.abrv ~ "West",
+                            state_abbrev == "DC" ~ "DC",
+                            state_abbrev == "PR" ~ "PR",
+                            state_abbrev == "GU" ~ "GU"),
+         region = factor(region))
+
+brfss <- brfss %>%
+  mutate(gend = gend-1)
+```
+
+## Inspect the data
+
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+head(brfss)
+```
+
+## Fit the multilevel model
+
+This can be done either with maximum likelihood (here) or Bayesian - I like Bayesian but gets really intensive as sample sizes increase.
+
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+library(merTools)
+
+mod_1 <- glmer(lgbt ~ gend + (1|educ) + (1|age_group) + (1|race6) + (1|age_edu) + (1|state) + (1|region) + medinc + ss_couples + pct_white + pubop + cell_int, family=binomial(link="logit"), data = brfss, weights = aw1)
+```
+
+## Inspect the result:
+
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+summary(mod_1)
+```
+
+## Fix REs not in the model:
+
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+medEff <- REquantile(mod_1, quantile = 0.5, 
+                    groupFctr = "state", 
+                    term = "(Intercept)")
+
+```
+
+```{r, eval=TRUE, echo=FALSE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+post_strat <- haven::read_dta("C:/Users/aflor/OneDrive - american.edu/TransPop Update/acs2019_gend.dta")
+
+post_strat <- post_strat %>%
+  mutate(region = case_when(state_abbrev %in% NE.abrv ~ "Northeast",
+                            state_abbrev %in% MW.abrv ~ "Midwest",
+                            state_abbrev %in% S.abrv ~ "South",
+                            state_abbrev %in% W.abrv ~ "West",
+                            state_abbrev == "DC" ~ "DC",
+                            state_abbrev == "PR" ~ "PR",
+                            state_abbrev == "GU" ~ "GU"),
+         region = factor(region))
+
+state_level <- read_dta("C:/Users/aflor/OneDrive - american.edu/TransPop Update/state_level.dta") 
+post_strat$st_num2 <- match(post_strat$state_abbrev, state_level$state_abbrev)
+
+#make a vector for present REs: was as.numeric() removing for now
+state_in_vec <- rownames(ranef(mod_1)$state)
+
+new_data <- post_strat %>%
+  dplyr::select(state, sex, race6, region, age_group, educ, state_abbrev)
+
+#assign DC - West, closest to Zero
+new_data <- new_data %>%
+  mutate(region = case_when(state_abbrev %in% NE.abrv ~ "Northeast",
+                            state_abbrev %in% MW.abrv ~ "Midwest",
+                            state_abbrev %in% S.abrv ~ "South",
+                            state_abbrev %in% W.abrv ~ "West",
+                            state_abbrev == "DC" ~ "West",
+                            state_abbrev == "PR" ~ "PR",
+                            state_abbrev == "GU" ~ "GU"),
+         region = factor(region))
+
+library(Hmisc)
+
+new_data$state <- post_strat$st_num2
+
+new_data <- new_data %>%
+  mutate(state_num = state,
+         state = state_abbrev)
+
+# assign the NA states to the median effect (approx zero)
+```
+
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+new_data$state[new_data$state %nin% state_in_vec] <- medEff
+```
+
+## Predict probabilities
+
+Use `new_data` as a fake a dataset with values set to each unique category in the data for model predictions: 
+
+```{r, eval=TRUE, echo=FALSE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+new_data$medinc <- state_level$medinc[post_strat$st_num2]
+new_data$ss_couples <- state_level$ss_couples[post_strat$st_num2]
+new_data$pct_white <- state_level$pct_white[post_strat$st_num2]
+new_data$pubop <- state_level$pubop[post_strat$st_num2]
+
+new_data <- new_data %>%
+  rename(agegroup = age_group)
+
+new_data <- new_data %>%
+  mutate(gend = sex - 1)
+
+new_data$cell_int <- state_level$cell_int[post_strat$st_num2]
+
+#age_edu 
+new_data <- new_data %>%
+  mutate(age_edu = case_when(agegroup==1 & educ==1 ~ 1,
+                             agegroup==1 & educ==2 ~ 2,
+                             agegroup==1 & educ==3 ~ 3,
+                             agegroup==2 & educ==1 ~ 4,
+                             agegroup==2 & educ==2 ~ 5,
+                             agegroup==2 & educ==3 ~ 6,
+                             agegroup==3 & educ==1 ~ 7,
+                             agegroup==3 & educ==2 ~ 8,
+                             agegroup==3 & educ==3 ~ 9,
+                             agegroup==4 & educ==1 ~ 10,
+                             agegroup==4 & educ==2 ~ 11,
+                             agegroup==4 & educ==3 ~ 12,
+                             agegroup==5 & educ==1 ~ 13,
+                             agegroup==5 & educ==2 ~ 14,
+                             agegroup==5 & educ==3 ~ 15))
+
+new_data <- new_data %>%
+  rename(age_group = agegroup)
+```
+
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+head(new_data)
+```
+## Predict probabilities
+
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+Preds <- predictInterval(mod_1, newdata = new_data, type = "probability")
+
+head(Preds)
+```
+
+## Post-stratify
+
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+post_strat$lgbt_pop <- post_strat$n * Preds$fit
+post_strat$lgbt_pop_lb <- post_strat$n * Preds$lwr
+post_strat$lgbt_pop_ub <- post_strat$n * Preds$upr
+```
+
+## Post-stratify
+
+```{r,eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+library(knitr)
+kable(head(post_strat, n = c(6,13)))
+```
+
+## Aggregate results to meaningful categories
+
+```{r, eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+state_ests <- post_strat %>%
+  group_by(state_name) %>%
+  summarise(pop = sum(n), lgbt_pop = sum(lgbt_pop), lb = sum(lgbt_pop_lb), ub = sum(lgbt_pop_ub)) %>%
+  mutate(lgbt_pct = 100*lgbt_pop/pop, lb_pct = 100*lb/pop, ub_pct = 100*ub/pop)
+```
+
+## And, you've done it!
+
+```{r, eval=TRUE, echo=FALSE, message=FALSE, warning=FALSE, prompt=TRUE, strip.white=TRUE}
+library(viridis)
+library(usmap)
+library(ggthemes)
+
+us_states <- us_map(regions = "states")
+
+state_ests$st_num <- match(state_ests$state_name, post_strat$state_name)
+state_ests$abbr <- post_strat$state_abbrev[state_ests$st_num]
+
+nat_map <- left_join(us_states, state_ests)
+
+p0 <- ggplot(nat_map, mapping = aes(x = x, y = y, group = group, fill = lgbt_pct))
+
+p1 <- p0 + geom_polygon(color = "white", size = 0.4) +
+  coord_equal() +
+  theme_map()
+
+p2 <- p1 + scale_fill_viridis_c(option = "plasma")
+
+p2 + theme(legend.position = "bottom") +
+  labs(fill = "% of adults identifying\nas LGBT in the US")
+
+```
+## Thank you
