@@ -1,0 +1,219 @@
+---
+title: "Intro to R Tips and Tricks"
+author: "Mark Tenenbaum"
+output: pdf_document
+---
+
+*Note*: Apologies in advance for any spelling/grammar issues :) This was quickly thrown together. 
+
+## Getting ready 
+```{r message=FALSE, warning=FALSE}
+# libraries
+library(tidyverse)
+library(haven)
+
+# If you have never used the library before, you will need to install it first
+# using install.packages, e.g., install.packages('haven')
+
+# Set your working directory
+setwd("~/Library/Mobile Documents/com~apple~CloudDocs/Non-paper R projects/CCES 2020")
+
+# How to load in a data set you are using from your working directory
+cces20 <- read.csv('cces20.csv')                               # CSV example
+ccescumulative <- read_dta('cumulative_2006-2020.dta')         # DTA example
+cces19 <- load('cces19.RData')                                 # RData example
+```
+
+## Practice data
+There are many data sets "native" to R. This means the data sets are pre-installed. To view the data sets native to R, you can run the `data()` command. Some examples are "iris" (contains dimensions of various flowers) and "mtcars" (facts about misc. cars). These data sets are great to practice programming. 
+
+For the rest of this document, I will be use the "iris" data set. 
+
+## Inspecting your data
+Before you start manipulating your data and running your data, you want to first inspect it. Here are some helpful functions. 
+```{r}
+# see the first six six rows of data
+head(iris)
+
+# see the number of rows/cols
+dim(iris)
+
+# names of the columns
+colnames(iris)
+
+# some summary statistics of each column
+summary(iris)
+
+# structure of each column
+str(iris)
+
+# see the variable class of a particular column (numeric, character, etc.)
+class(iris$Species)
+
+# See unique values within a column
+unique(iris$Species)
+
+# check if column contains NAs
+sum(is.na(iris$Sepal.Length))
+```
+
+
+## Using Tidyverse
+Most of the functions used in this cheat sheet use functions from the tidyverse library. You will frequently see the symbol `%>%`. This is called a "pipe." You can interpret this symbol as meaning "and then." For example, the code below means "take the iris data set, *and then* filter the data for ONLY rows where the "Species" column is equal to "setosa."
+
+```{r}
+example1 <- iris %>%                           
+  filter(Species == 'setosa')
+```
+
+
+## Saving Your Changes
+When you make changes to your data, you can either save your changes *over* the previous version of the data set (like hitting "save" on your computer) or your can save them as *another* object (like hitting "save as" on your computer). I'll give you examples of each. 
+```{r}
+# Saving over the original (hitting "save")
+iris <- iris %>%                            # assigning to object of same name
+  filter(Species == 'setosa')
+
+# Saving as a new object (hitting "save as")
+example_save1 <- iris %>%                          # assigning to object of diff. name
+  filter(Species == 'setosa')
+```
+
+If you're messing around with data sets native to R and you want to remove any changes (i.e., making the data set "fresh"), just do this: 
+```{r}
+data(iris)
+```
+
+
+# Manipulating data
+Here is a very, very, non-comprehensive list of functions that may be helpful to you this semester. Please note that *there are many ways to do the same thing in R.* These are some functions that I like. As your programming skills improve, you may come to prefer other ways of doing the same things. 
+
+## Removing rows/columns
+```{r}
+# Selecting only certain columns
+column_example1 <- iris %>% 
+  select(Species, Petal.Length)
+
+# unselecting only certain colums
+column_example2 <- iris %>% 
+  select(-Species, -Petal.Length)
+
+# Filtering rows in your data (use: ==, !=, >=, or <=)
+filter_example1 <- iris %>% 
+  filter(Species != 'setosa')                # filtering out the species setosa
+
+# More complicated filtering example ("&" means "and", and "|" means "or')
+filter_example2 <- iris %>% 
+  filter(Species != 'setosa' & Petal.Length > 3)
+
+# Removing NAs from specific column(s)
+no_na_example <- iris %>% 
+  drop_na(Species, Sepal.Length)
+```
+
+## Creating new columns with `mutate()`
+```{r}
+# Create new columns using "mutate"
+new_col_example1 <- iris %>% 
+  mutate(example_col = 'hi class')   # New col where every obs. reads "hi class"
+
+# Tons of increasingly more complicated examples:
+new_col_example2 <- iris %>% 
+  mutate(example_equal = Species,         # setting equal to another column
+         example_add = Sepal.Length + 2,  # equal to another  col, then adding 2
+         example_multiply = (Sepal.Length + 2)*10, # same, then mulitply by 10
+         example_binary  = ifelse(Petal.Length > 1, 1, 0), # good for dummy vars
+         example_new = case_when(Sepal.Length >= mean(Sepal.Length) ~ 'Large',
+                                 Sepal.Length < mean(Sepal.Length) ~ 'Small'))
+```
+
+## Performing some basic operations
+```{r}
+# Taking the mean of the column "Sepal.Length"
+iris %>% 
+  summarize(mean_examp = mean(Sepal.Length))
+
+# Some more operations
+iris %>% 
+  summarize(mean_examp = mean(Sepal.Length),
+            variance_examp = var(Sepal.Length),
+            sd_examp = sd(Sepal.Length),
+            median_examp = sd(Sepal.Length))
+
+# You can group commands by another column. Here I'll take the mean by species
+iris %>% 
+  group_by(Species) %>% 
+  summarize(mean = mean(Sepal.Length))
+
+# You can combine these operations E.g., I'll construct 95% confidence intervals 
+iris %>% 
+  group_by(Species) %>% 
+  summarize(mean = mean(Sepal.Length),
+            min_conf_in = mean(Sepal.Length) - (1.96*(sd(Sepal.Length)/(sqrt(length(Sepal.Length))))),
+            max_conf_in = mean(Sepal.Length) + (1.96*(sd(Sepal.Length)/(sqrt(length(Sepal.Length))))))
+
+```
+
+
+### Combining what we have learned
+Here is an example of me combining some of the tools we have learned so far. 
+```{r}
+iris %>% 
+  filter(Petal.Length <= 5) %>%                 # Filtering out large petals
+  drop_na(Sepal.Width) %>%                      # Removing any NAs from this col
+  group_by(Species) %>%                         # Grouping by "Species"
+  summarize(mean = mean(Sepal.Length),          # means + confidence intervals
+            min_conf_in = mean(Sepal.Length) - (1.96*(sd(Sepal.Length)/(sqrt(length(Sepal.Length))))),
+            max_conf_in = mean(Sepal.Length) + (1.96*(sd(Sepal.Length)/(sqrt(length(Sepal.Length))))))
+```
+
+# Some data visualization basics
+There are many ways to construct data visualizations (like everything else!) in R. There are functions included in "base R" as well as certain packages (e.g., SJplot, ggplot) which are geared towards visualizations. I use the ggplot package (included within the "tidyverse" package) to make data visualizations. Here are some examples. 
+
+```{r}
+# Histogram
+ggplot(iris) + 
+  geom_histogram(aes(x = Species), stat = 'count')
+
+# scatterplot
+ggplot(iris) +
+  geom_point(aes(x = Sepal.Width, y = Petal.Length))
+
+# Now, let's add a "best fit" line
+ggplot(iris) +
+  geom_point(aes(x = Sepal.Width, y = Petal.Length)) +
+  geom_smooth(aes(x = Sepal.Width, y = Petal.Length), method = 'lm')
+
+# Now let's make the plot look pretty
+ggplot(iris) +
+  geom_point(aes(x = Sepal.Width, y = Petal.Length)) +
+  geom_smooth(aes(x = Sepal.Width, y = Petal.Length), method = 'lm') +
+  labs(title = 'Example Title',           # use "labs" to add labels
+       subtitle = 'Example Subtitle',
+       x = 'Sepal Width', 
+       y = 'Petal Length') +
+  theme_minimal()                         # this one of many themes you can add 
+```
+
+### going seamlessly from data analysis to vizualizations
+```{r}
+iris %>% 
+  filter(Petal.Length <= 5) %>%                 # Filtering out large petals
+  drop_na(Sepal.Width) %>%                      # Removing any NAs from this col
+  group_by(Species) %>%                         # Grouping by "Species"
+  mutate(Species = case_when(Species == 'setosa' ~ 'Setosa',     # capitalizing
+                              Species == 'versicolor' ~ 'Versicolor',
+                              Species == 'virginica' ~ 'Virginica')) %>% 
+  summarize(mean = mean(Sepal.Length),          # means + confidence intervals
+            min_conf_in = mean(Sepal.Length) - (1.96*(sd(Sepal.Length)/(sqrt(length(Sepal.Length))))),
+            max_conf_in = mean(Sepal.Length) + (1.96*(sd(Sepal.Length)/(sqrt(length(Sepal.Length)))))) %>% 
+  ggplot(., aes(x = Species, y = mean)) +
+  geom_errorbar(aes(ymin = min_conf_in, ymax = max_conf_in), width = 0.1) +
+  geom_point() + 
+  theme_bw() +
+  labs(title = 'Mean Sepal Length, By Species',
+       subtitle = 'Iris dataset',
+       x = '', 
+       y = 'Mean')
+```
+
