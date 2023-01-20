@@ -33,7 +33,7 @@ flights <- flights %>%
   select(flights, datetime)
 
 
-# AUTOMATICALLY CONVERT TO DATE/TIME FORMAT ------------------------------------
+## AUTOMATICALLY CONVERT TO DATE/TIME FORMAT -----------------------------------
 as_hms()                                                # covert to hms
 as_date()                                               # convert to date
 as_datetime()                                           # convert to POSIXct 
