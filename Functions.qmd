@@ -18,6 +18,19 @@ volume_cylinder <- function(r, h){
 
 volume_cylinder(4, 8)
 
+# Calculate sum of logs of any list of numbers (can enter multiple bc of "any" function
+calc_sum_logs <- function(int) {
+  if (any(int < 1)){                         # for any positive number
+    print('Must contain positive number')
+  } else {
+    nat_log <- log(int)                      # natural log
+    common_log <- log10(int)                 # common log
+    base_log <- log2(int)                    # base log
+    total <- nat_log + common_log + base_log # sum
+    total                                    # print
+  }
+}
+
 
 # Formula for z score
 z_score <- function(obs, mean, sd){
