@@ -5,7 +5,7 @@ binom_mod <- glm(outcome ~ predictors, data = data, weights = weight, family = '
 
 # Multinomial logistic regression (unordered outcome)
 library(nnet)
-multi_mod <- glm(outcome ~ predictors, data = data, weights = weight)
+multi_mod <- multinom(outcome ~ predictors, data = data, weights = weight)
 
 # Ordinal logistic regression (ordered outcome)
 library(MASS)
