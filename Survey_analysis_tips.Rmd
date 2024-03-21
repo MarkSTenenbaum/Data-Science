@@ -1,14 +1,3 @@
----
-title: "GOVT 710:  \nSurvey Data"
-author: "Andrew R. Flores"
-date: "Spring 2022"
-resource_files:
-  - template.pptx
-output: 
-  powerpoint_presentation:
-    reference_doc: template.pptx
-
----
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
@@ -515,4 +504,3 @@ p2 + theme(legend.position = "bottom") +
   labs(fill = "% of adults identifying\nas LGBT in the US")
 
 ```
-## Thank you
