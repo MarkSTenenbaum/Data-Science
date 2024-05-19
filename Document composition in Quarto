@@ -1,0 +1,28 @@
+---
+title: "My First Document"
+author:
+  - name: "Mark S. Tenenbaum"
+    email: "markstenenbaum@gmail.com"
+    affiliations:
+      - name: "American University"
+format:
+  pdf: 
+    #toc: true
+    number-sections: true
+    mainfont: 'Times New Roman'
+    sansfont: 'Times New Roman'
+editor: visual
+bibliography: 
+  - '/Users/marktenenbaum/Downloads/test.bib'
+bibliography: references.bib
+---
+
+## Introduction
+
+Here I type this. I am going to type this [@mason2013].
+
+## Literature review
+
+This article wrote this @valenzuela2014.
+
+## References
