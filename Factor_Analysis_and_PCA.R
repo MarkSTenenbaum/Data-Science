@@ -10,11 +10,10 @@ fa(econ16, nfactors = ncol(econ16), rotate = 'oblimin') # 1
 
 ## PCA Example
 library(psych)
-relevant_data <- c20[, c("gsamb", "abortamb", "ambecon")]
-pca_result <- principal(relevant_data, nfactors = 1, rotate = "none"); pca_result
-
-loadings <- pca_result$loadings                        
-pca_result$values                                      # gets eigenvalue; wants greater than 1 (labeled SS loadings)
-weights <- loadings[,1]
-scale_scores <- as.matrix(relevant_data) %*% weights   # create weighted scale
+moddata <- c20 %>% dplyr::select(ideo_fold, pid_fold, approve_fold)
+modpca <- principal(moddata, nfactors = 1, rotate = "none")
+modloads <- modpca$loadings
+modweights <- modloads[,1]
+mod_new <- as.matrix(moddata) %*% modweights
+c20 <- c20 %>% mutate(modindexpca = mod_new/2.805659)
 
