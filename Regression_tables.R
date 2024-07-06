@@ -45,3 +45,10 @@ summary(model, vcov. = vcovHC(model, type = "HC1"))
 # IV overidentification test (tests if exogeneous relationship between instrument and outcome
 summary(model, vcov. = vcovHC(model, type = "HC1"), diagnostics = TRUE)
 
+# Downloading Stargazer table as PNG
+#extract png 
+webshot("Ch6_AT2.htm", file = "Ch6_AT2.png")
+image <- image_read("Ch6_AT2.png")
+image_white_bg <- image_background(image, "white")
+trimmed_image <- image_trim(image_white_bg)
+image_write(trimmed_image, path = "Ch6_AT2.png", format = "png")
